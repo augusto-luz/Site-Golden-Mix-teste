@@ -88,11 +88,17 @@ async function baixarEConverterImagem(url, larguraPx, alturaPx) {
     if (!resposta.ok) return null;
 
     const bufOriginal = Buffer.from(await resposta.arrayBuffer());
-    // Converte qualquer formato (WebP, AVIF, JPG, PNG...) para PNG, já cortando
-    // ("cover", sem distorcer) no mesmo formato oval usado no card do catálogo.
+    // Converte qualquer formato (WebP, AVIF, JPG, PNG...) para PNG. Usamos "contain"
+    // (não "cover") para a peça inteira sempre aparecer, sem cortar nenhuma parte —
+    // o espaço sobrando fica transparente, revelando o fundo oval creme já desenhado
+    // atrás da foto no card, então não aparece nenhuma borda/caixa estranha.
     const bufPng = await sharp(bufOriginal)
       .rotate()
-      .resize(larguraPx, alturaPx, { fit: 'cover', position: 'centre' })
+      .resize(larguraPx, alturaPx, {
+        fit: 'contain',
+        position: 'centre',
+        background: { r: 0, g: 0, b: 0, alpha: 0 }
+      })
       .png()
       .toBuffer();
     return bufPng;
@@ -256,8 +262,9 @@ module.exports = async function handler(req, res) {
       const buf = buffersImagens[i];
       if (buf) {
         try {
-          // A foto já saiu do sharp cortada exatamente no tamanho da caixa (sem distorcer),
-          // então só precisamos encaixá-la dentro do recorte oval.
+          // A foto já saiu do sharp no tamanho exato da caixa, com a peça inteira visível
+          // (sem cortar) e o espaço sobrando transparente — por isso o oval creme desenhado
+          // acima já aparece por trás naturalmente, sem precisar de mais nada aqui.
           doc.save();
           doc.ellipse(cx, cyImg, rx, ry).clip();
           doc.image(buf, cx - rx, cyImg - ry, { width: rx * 2, height: ry * 2 });
