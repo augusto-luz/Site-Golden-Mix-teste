@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/catalogo.js": {
+      "maxDuration": 10
+    }
+  }
+}

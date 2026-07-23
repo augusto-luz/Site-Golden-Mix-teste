@@ -1,0 +1,12 @@
+{
+  "name": "golden-mix-site",
+  "version": "1.2.0",
+  "private": true,
+  "engines": {
+    "node": ">=18.x"
+  },
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0",
+    "pdfkit": "^0.15.0"
+  }
+}
