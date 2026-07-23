@@ -85,10 +85,10 @@ Criei um catálogo em PDF gerado **na hora** (não é um arquivo fixo que fica d
 - Como o PDF é sempre gerado a partir do banco, ele nunca fica desatualizado: assim que você cadastra ou edita uma peça no admin, o próximo catálogo gerado já reflete a mudança.
 
 **Detalhes técnicos que vale saber:**
-- A geração usa a biblioteca `pdfkit` (adicionada ao `package.json`) e roda como função serverless — não precisa de nenhuma configuração extra além do deploy normal na Vercel.
+- A geração usa `pdfkit` para montar o PDF e `sharp` para baixar/converter as fotos (adicionados ao `package.json`) — rodam como função serverless, sem precisar de configuração extra além do deploy normal na Vercel.
+- **Fotos de marketplaces (Mercado Livre, etc.):** muitos anúncios bloqueiam download de imagem sem parecer um navegador de verdade, e costumam servir a foto em WebP — formato que o gerador de PDF não lê sozinho. Por isso o catálogo já simula um navegador ao baixar cada foto e converte automaticamente qualquer formato (WebP, AVIF, JPG, PNG) para PNG antes de montar o PDF. Se ainda assim algum link específico não deixar baixar a imagem (ex.: exige login, ou o anúncio foi removido), o card daquela peça mostra a moldura oval lisa no lugar, sem travar a geração do restante do catálogo.
 - As fontes do PDF são as fontes padrão embutidas no gerador (uma serifada e uma sem serifa, no mesmo espírito da Cormorant Garamond + Jost do site), já que não é possível embutir arquivos de fonte de terceiros sem aumentar a complexidade do projeto. As cores, o logo e a estrutura visual seguem fielmente a identidade da Golden Mix.
-- Cada foto de produto é baixada da URL cadastrada para entrar no PDF; se alguma imagem falhar ao carregar (link quebrado, fora do ar), o card do catálogo mostra a moldura oval lisa no lugar, sem quebrar a geração do restante do catálogo.
-- Para catálogos com muitas peças (dezenas de fotos), o tempo de geração pode chegar perto do limite de 10 segundos do plano Hobby da Vercel; se isso acontecer, vale considerar o plano Pro ou otimizar o tamanho das fotos hospedadas.
+- Para catálogos com muitas peças (o "todas as coleções" pode passar de 20 páginas), o download das fotos é feito em lotes paralelos com um limite de tempo — se sobrar pouco tempo de execução, as últimas fotos da lista podem não entrar a tempo (aparecem com a moldura lisa), mas o catálogo sempre termina de ser gerado. Se isso acontecer com frequência, considere o plano Pro da Vercel (mais tempo de execução) ou fotos hospedadas em um serviço mais rápido (Imgur/Postimages costumam responder mais rápido que alguns links de marketplace).
 
 ## 🗂️ Peças agrupadas por categoria no admin
 

@@ -15,6 +15,16 @@ const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
 
+// Carregado com rede de segurança: se o sharp não conseguir carregar por algum motivo
+// específico do ambiente de deploy, o catálogo continua sendo gerado normalmente,
+// só sem as fotos (em vez de o endpoint inteiro quebrar com erro 500).
+let sharp = null;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  console.error('Não foi possível carregar o módulo sharp — o catálogo será gerado sem fotos:', e && e.message);
+}
+
 const CORES = {
   creamHeader: '#efeee6',
   cream: '#f8f3e9',
@@ -43,6 +53,22 @@ const FONT_DISPLAY_REG = 'Times-Roman';
 const FONT_BODY = 'Helvetica';
 const FONT_BODY_BOLD = 'Helvetica-Bold';
 
+// Muitos anúncios do Mercado Livre (e de outros marketplaces) bloqueiam pedidos de
+// imagem que não pareçam vir de um navegador de verdade, e costumam servir WebP por
+// padrão (que o pdfkit não sabe ler sozinho). Por isso simulamos um navegador aqui
+// e sempre convertemos a imagem baixada para PNG antes de colocar no PDF.
+const HEADERS_IMAGEM = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+  'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+  'Referer': 'https://www.mercadolivre.com.br/'
+};
+
+// Limite de tempo total dedicado a baixar/converter fotos, para sobrar tempo de
+// gerar o PDF em si dentro do limite de execução da função serverless.
+const ORCAMENTO_TEMPO_IMAGENS_MS = 7000;
+// Quantas fotos baixamos ao mesmo tempo (evita sobrecarregar a função e o servidor de origem).
+const CONCORRENCIA_IMAGENS = 12;
+
 async function buscarProdutos(categoria) {
   if (categoria && categoria !== 'todos') {
     const { rows } = await sql`SELECT * FROM produtos WHERE categoria = ${categoria} ORDER BY categoria, nome;`;
@@ -52,19 +78,49 @@ async function buscarProdutos(categoria) {
   return rows;
 }
 
-async function baixarImagem(url) {
-  if (!url) return null;
+async function baixarEConverterImagem(url, larguraPx, alturaPx) {
+  if (!url || !sharp) return null;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const resposta = await fetch(url, { signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const resposta = await fetch(url, { signal: controller.signal, headers: HEADERS_IMAGEM });
     clearTimeout(timeout);
     if (!resposta.ok) return null;
-    const buf = Buffer.from(await resposta.arrayBuffer());
-    return buf;
+
+    const bufOriginal = Buffer.from(await resposta.arrayBuffer());
+    // Converte qualquer formato (WebP, AVIF, JPG, PNG...) para PNG, já cortando
+    // ("cover", sem distorcer) no mesmo formato oval usado no card do catálogo.
+    const bufPng = await sharp(bufOriginal)
+      .rotate()
+      .resize(larguraPx, alturaPx, { fit: 'cover', position: 'centre' })
+      .png()
+      .toBuffer();
+    return bufPng;
   } catch (err) {
     return null; // sem imagem: o card usa o fundo oval liso como no site
   }
+}
+
+// Baixa as imagens em lotes (em vez de todas de uma vez) e para de tentar novas
+// assim que o orçamento de tempo acabar, devolvendo null para o restante — assim
+// o catálogo sempre termina de gerar, mesmo que algumas fotos não deem tempo.
+async function baixarImagensEmLotes(produtos, larguraPx, alturaPx) {
+  const resultado = new Array(produtos.length).fill(null);
+  const inicio = Date.now();
+  let indice = 0;
+
+  async function worker() {
+    while (indice < produtos.length) {
+      if (Date.now() - inicio > ORCAMENTO_TEMPO_IMAGENS_MS) return;
+      const meuIndice = indice++;
+      resultado[meuIndice] = await baixarEConverterImagem(produtos[meuIndice].imagem_url, larguraPx, alturaPx);
+    }
+  }
+
+  const workers = [];
+  for (let i = 0; i < CONCORRENCIA_IMAGENS; i++) workers.push(worker());
+  await Promise.all(workers);
+  return resultado;
 }
 
 function formatarPreco(preco) {
@@ -96,8 +152,25 @@ module.exports = async function handler(req, res) {
     const doc = new PDFDocument({ size: 'A4', margin: 0, bufferPages: true, autoFirstPage: false });
     doc.pipe(res);
 
-    // Baixa todas as fotos em paralelo antes de desenhar, para não serializar a espera de rede.
-    const buffersImagens = await Promise.all(produtos.map(p => baixarImagem(p.imagem_url)));
+    // ---------------- GRADE: medidas fixas (usadas tanto no recorte das fotos quanto no desenho) ----------------
+    const margin = 40;
+    const cols = 3;
+    const gap = 16;
+    const pageWidthA4 = 595.28; // A4 em pt — usado só para pré-calcular o recorte das imagens antes de abrir a página
+    const cardW = (pageWidthA4 - margin * 2 - gap * (cols - 1)) / cols;
+    const cardH = 210;
+    const rowGap = 20;
+    const topStart = 100;
+
+    const imgAreaH = 112;
+    const rx = cardW / 2 - 16;
+    const ry = imgAreaH / 2;
+    // Resolução 2x para as fotos saírem nítidas na impressão/zoom, não só na tela.
+    const larguraPx = Math.round(rx * 2 * 2);
+    const alturaPx = Math.round(ry * 2 * 2);
+
+    // Baixa e converte todas as fotos antes de desenhar (em lotes, com orçamento de tempo).
+    const buffersImagens = (produtos.length && sharp) ? await baixarImagensEmLotes(produtos, larguraPx, alturaPx) : [];
 
     // ---------------- CAPA ----------------
     doc.addPage({ size: 'A4', margin: 0 });
@@ -146,15 +219,7 @@ module.exports = async function handler(req, res) {
     }
 
     // ---------------- GRADE DE PRODUTOS ----------------
-    const margin = 40;
-    const cols = 3;
-    const gap = 16;
-    const cardW = (W - margin * 2 - gap * (cols - 1)) / cols;
-    const cardH = 210;
-    const rowGap = 20;
-    const topStart = 100;
     const bottomLimit = H - 55;
-
     let x = margin, y = topStart, col = 0;
 
     function novaPaginaGrade() {
@@ -181,11 +246,8 @@ module.exports = async function handler(req, res) {
       doc.roundedRect(x, y, cardW, cardH, 8).fillAndStroke(CORES.white, CORES.goldDeep);
 
       // Moldura oval da foto (mesmo espírito do .product-art do site)
-      const imgAreaH = 112;
       const cx = x + cardW / 2;
       const cyImg = y + 16 + imgAreaH / 2;
-      const rx = cardW / 2 - 16;
-      const ry = imgAreaH / 2;
 
       doc.save();
       doc.ellipse(cx, cyImg, rx, ry).fill(CORES.creamDeep);
@@ -194,16 +256,14 @@ module.exports = async function handler(req, res) {
       const buf = buffersImagens[i];
       if (buf) {
         try {
-          const img = doc.openImage(buf);
-          const boxW = rx * 2, boxH = ry * 2;
-          const escala = Math.max(boxW / img.width, boxH / img.height);
-          const iw = img.width * escala, ih = img.height * escala;
+          // A foto já saiu do sharp cortada exatamente no tamanho da caixa (sem distorcer),
+          // então só precisamos encaixá-la dentro do recorte oval.
           doc.save();
           doc.ellipse(cx, cyImg, rx, ry).clip();
-          doc.image(img, cx - iw / 2, cyImg - ih / 2, { width: iw, height: ih });
+          doc.image(buf, cx - rx, cyImg - ry, { width: rx * 2, height: ry * 2 });
           doc.restore();
         } catch (e) {
-          // Se a imagem vier corrompida/formato não suportado, mantém o fundo oval liso.
+          // Se a imagem vier corrompida, mantém o fundo oval liso.
         }
       }
 
