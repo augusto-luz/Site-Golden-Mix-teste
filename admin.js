@@ -1,5 +1,28 @@
 /* Golden Mix Semijoias — Painel Administrativo (CRUD de produtos) */
 
+<<<<<<< HEAD
+=======
+/* ---- Segurança: escapa texto antes de inserir via innerHTML e valida links de imagem ----
+   Protege o próprio painel: se algum dado malicioso chegar ao banco (ex: por uma falha
+   futura em outro ponto), ele aparece como texto normal aqui, nunca como HTML/JS ativo —
+   isso evita que um XSS "roube" a senha guardada em sessionStorage. */
+function escapeHtml(valor) {
+  return String(valor == null ? '' : valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function sanitizeImgUrl(url) {
+  try {
+    var u = new URL(url, location.href);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+  } catch (e) { /* URL inválida */ }
+  return '';
+}
+
+>>>>>>> d70e05d (backup de segurança pentest)
 const AUTH_KEY = 'gm_admin_password';
 let localProducts = [];
 
@@ -116,6 +139,7 @@ function renderProductGroups(lista) {
 
     const linhas = itens.map(p => {
       const extras = [p.imagem_url_2, p.imagem_url_3].filter(Boolean).length;
+<<<<<<< HEAD
       return `
         <tr>
           <td><img src="${p.imagem_url}" alt="${p.nome}"></td>
@@ -124,13 +148,29 @@ function renderProductGroups(lista) {
           <td class="actions">
             <button class="btn-edit" onclick="editProduct(${p.id})">Editar</button>
             <button class="btn-delete" onclick="deleteProduct(${p.id})">Excluir</button>
+=======
+      const nomeSeguro = escapeHtml(p.nome);
+      const fotoSegura = escapeHtml(sanitizeImgUrl(p.imagem_url));
+      return `
+        <tr>
+          <td><img src="${fotoSegura}" alt="${nomeSeguro}"></td>
+          <td><strong>${nomeSeguro}</strong>${extras ? `<br><small style="color:var(--ink-soft)">+${extras} foto${extras > 1 ? 's' : ''}</small>` : ''}</td>
+          <td>R$ ${escapeHtml(parseFloat(p.preco).toFixed(2))}</td>
+          <td class="actions">
+            <button class="btn-edit" onclick="editProduct(${Number(p.id) || 0})">Editar</button>
+            <button class="btn-delete" onclick="deleteProduct(${Number(p.id) || 0})">Excluir</button>
+>>>>>>> d70e05d (backup de segurança pentest)
           </td>
         </tr>
       `;
     }).join('');
 
     details.innerHTML = `
+<<<<<<< HEAD
       <summary>${label} <span class="count">${itens.length} peça${itens.length > 1 ? 's' : ''}</span></summary>
+=======
+      <summary>${escapeHtml(label)} <span class="count">${itens.length} peça${itens.length > 1 ? 's' : ''}</span></summary>
+>>>>>>> d70e05d (backup de segurança pentest)
       <table>
         <thead><tr><th>Foto</th><th>Nome</th><th>Preço</th><th>Ações</th></tr></thead>
         <tbody>${linhas}</tbody>
@@ -301,10 +341,22 @@ async function loadBanners() {
       const card = document.createElement('div');
       card.className = 'banner-card';
 
+<<<<<<< HEAD
       const camposProduto = b.hasProductFields ? `
         <div class="field" style="text-align:left; margin-bottom:10px;">
           <label style="font-size:.7rem;">Título</label>
           <input type="text" data-titulo-input value="${b.titulo || ''}" placeholder="Nome da peça em destaque">
+=======
+      const tituloSeguro = escapeHtml(b.titulo || '');
+      const labelSeguro = escapeHtml(b.label || '');
+      const slotSeguro = escapeHtml(b.slot || '');
+      const fotoSegura = escapeHtml(sanitizeImgUrl(b.imagem_url));
+
+      const camposProduto = b.hasProductFields ? `
+        <div class="field" style="text-align:left; margin-bottom:10px;">
+          <label style="font-size:.7rem;">Título</label>
+          <input type="text" data-titulo-input value="${tituloSeguro}" placeholder="Nome da peça em destaque">
+>>>>>>> d70e05d (backup de segurança pentest)
         </div>
         <div class="field" style="text-align:left; margin-bottom:10px;">
           <label style="font-size:.7rem;">Categoria</label>
@@ -314,11 +366,16 @@ async function loadBanners() {
         </div>
         <div class="field" style="text-align:left; margin-bottom:10px;">
           <label style="font-size:.7rem;">Preço (R$)</label>
+<<<<<<< HEAD
           <input type="number" step="0.01" min="0" data-preco-input value="${b.preco !== null && b.preco !== undefined ? b.preco : ''}" placeholder="0.00">
+=======
+          <input type="number" step="0.01" min="0" data-preco-input value="${b.preco !== null && b.preco !== undefined ? escapeHtml(b.preco) : ''}" placeholder="0.00">
+>>>>>>> d70e05d (backup de segurança pentest)
         </div>
       ` : '';
 
       card.innerHTML = `
+<<<<<<< HEAD
         <span class="banner-slot-key">${b.slot}</span>
         <h4>${b.hasProductFields ? (b.titulo || b.label) : b.label}</h4>
         <div class="banner-preview" data-preview>
@@ -328,6 +385,17 @@ async function loadBanners() {
         </div>
         ${camposProduto}
         <input type="url" placeholder="Cole o link da imagem (Imgur, Postimages...)" value="${b.imagem_url || ''}" data-url-input>
+=======
+        <span class="banner-slot-key">${slotSeguro}</span>
+        <h4>${b.hasProductFields ? (tituloSeguro || labelSeguro) : labelSeguro}</h4>
+        <div class="banner-preview" data-preview>
+          ${fotoSegura
+            ? `<img src="${fotoSegura}" alt="${labelSeguro}">`
+            : `<span>Sem imagem — usando o ícone padrão</span>`}
+        </div>
+        ${camposProduto}
+        <input type="url" placeholder="Cole o link da imagem (Imgur, Postimages...)" value="${escapeHtml(b.imagem_url || '')}" data-url-input>
+>>>>>>> d70e05d (backup de segurança pentest)
         <div class="banner-card-actions">
           <button type="button" class="btn-banner-save" data-action="save">Salvar</button>
           <button type="button" class="btn-banner-remove" data-action="remove">Remover imagem</button>
@@ -380,7 +448,11 @@ async function loadBanners() {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) { mostrarMsg(data.error || 'Não foi possível salvar.', 'error'); return; }
 
+<<<<<<< HEAD
           if (data.imagem_url) preview.innerHTML = `<img src="${data.imagem_url}" alt="${b.label}">`;
+=======
+          if (data.imagem_url) preview.innerHTML = `<img src="${escapeHtml(sanitizeImgUrl(data.imagem_url))}" alt="${escapeHtml(b.label)}">`;
+>>>>>>> d70e05d (backup de segurança pentest)
           if (b.hasProductFields) cardTitle.textContent = data.titulo || b.label;
           mostrarMsg('Salvo com sucesso.', 'ok');
         } catch (err) {

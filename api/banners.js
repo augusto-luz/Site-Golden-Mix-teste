@@ -9,6 +9,10 @@
 // DELETE /api/banners?slot=hero  -> remove a imagem do slot, voltando ao ícone padrão (exige senha admin)
 
 const { sql } = require('@vercel/postgres');
+<<<<<<< HEAD
+=======
+const { compararSenhaSegura, aplicarRateLimit, validarEsquemaUrlImagem, primeiroValor } = require('./_lib/security');
+>>>>>>> d70e05d (backup de segurança pentest)
 
 // Slots fixos correspondentes às formas já existentes no design.
 // Não é possível criar slots novos por aqui de propósito — isso manteria o layout intacto.
@@ -24,6 +28,11 @@ const SLOTS = [
 ];
 const SLOTS_VALIDOS = SLOTS.map(s => s.slot);
 const CATEGORIAS_VALIDAS = ['aneis', 'colares', 'brincos', 'pulseiras', 'conjuntos', 'pingentes', 'broches'];
+<<<<<<< HEAD
+=======
+const LIMITE_TITULO = 200;
+const LIMITE_URL = 2000;
+>>>>>>> d70e05d (backup de segurança pentest)
 
 let tabelaVerificada = false;
 
@@ -60,12 +69,23 @@ function verificarSenha(req) {
     return { ok: false, status: 500, error: 'ADMIN_PASSWORD não configurado nas variáveis de ambiente do servidor.' };
   }
   const recebida = req.headers['x-admin-password'];
+<<<<<<< HEAD
   if (!recebida || recebida !== esperado) {
+=======
+  if (!compararSenhaSegura(recebida, esperado)) {
+>>>>>>> d70e05d (backup de segurança pentest)
     return { ok: false, status: 401, error: 'Senha administrativa inválida ou ausente.' };
   }
   return { ok: true };
 }
 
+<<<<<<< HEAD
+=======
+function limitar(texto, tamanho) {
+  return String(texto || '').slice(0, tamanho);
+}
+
+>>>>>>> d70e05d (backup de segurança pentest)
 module.exports = async function handler(req, res) {
   try {
     await garantirTabela();
@@ -79,6 +99,12 @@ module.exports = async function handler(req, res) {
       return res.status(200).json(comMeta);
     }
 
+<<<<<<< HEAD
+=======
+    if (aplicarRateLimit(req, res, { chave: 'banners-escrita', maxTentativas: 30, janelaMs: 60 * 1000 })) {
+      return;
+    }
+>>>>>>> d70e05d (backup de segurança pentest)
     const auth = verificarSenha(req);
     if (!auth.ok) {
       return res.status(auth.status).json({ error: auth.error });
@@ -86,8 +112,13 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'PUT') {
       const body = req.body || {};
+<<<<<<< HEAD
       const slot = (body.slot || '').trim();
       const imagemUrl = (body.imagem_url || '').trim();
+=======
+      const slot = limitar((body.slot || '').trim(), 40);
+      const imagemUrl = validarEsquemaUrlImagem(limitar((body.imagem_url || '').trim(), LIMITE_URL));
+>>>>>>> d70e05d (backup de segurança pentest)
       const def = SLOTS.find(s => s.slot === slot);
 
       if (!def) {
@@ -96,21 +127,41 @@ module.exports = async function handler(req, res) {
 
       if (def.hasProductFields) {
         // "Favoritos": edição total — título, categoria e preço, além da imagem.
+<<<<<<< HEAD
         const titulo = (body.titulo || '').trim();
         const categoria = (body.categoria || '').trim();
         const precoNum = parseFloat(body.preco);
 
         if (!titulo || !categoria || isNaN(precoNum)) {
+=======
+        const titulo = limitar((body.titulo || '').trim(), LIMITE_TITULO);
+        const categoria = limitar((body.categoria || '').trim(), 50);
+        const precoNum = parseFloat(body.preco);
+
+        if (!titulo || !categoria || isNaN(precoNum) || precoNum < 0 || precoNum > 1000000) {
+>>>>>>> d70e05d (backup de segurança pentest)
           return res.status(400).json({ error: 'Preencha título, categoria e preço válido.' });
         }
         if (!CATEGORIAS_VALIDAS.includes(categoria)) {
           return res.status(400).json({ error: 'Categoria inválida.' });
         }
+<<<<<<< HEAD
+=======
+        // A imagem é opcional nesta edição (pode só atualizar texto/preço), mas se
+        // veio um valor não-vazio que não é um link http(s) válido, rejeitamos.
+        if (body.imagem_url && String(body.imagem_url).trim() && !imagemUrl) {
+          return res.status(400).json({ error: 'Link de imagem inválido — use um link http(s).' });
+        }
+>>>>>>> d70e05d (backup de segurança pentest)
 
         const { rows } = await sql`
           UPDATE banners
           SET titulo = ${titulo}, categoria = ${categoria}, preco = ${precoNum},
+<<<<<<< HEAD
               imagem_url = COALESCE(NULLIF(${imagemUrl}, ''), imagem_url),
+=======
+              imagem_url = COALESCE(${imagemUrl}, imagem_url),
+>>>>>>> d70e05d (backup de segurança pentest)
               atualizado_em = now()
           WHERE slot = ${slot}
           RETURNING *;
@@ -120,7 +171,11 @@ module.exports = async function handler(req, res) {
 
       // Slots só de imagem (hero, promo, about)
       if (!imagemUrl) {
+<<<<<<< HEAD
         return res.status(400).json({ error: 'Informe o link da imagem.' });
+=======
+        return res.status(400).json({ error: 'Informe um link de imagem http(s) válido.' });
+>>>>>>> d70e05d (backup de segurança pentest)
       }
       const { rows } = await sql`
         UPDATE banners
@@ -132,7 +187,11 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+<<<<<<< HEAD
       const slot = (req.query.slot || '').trim();
+=======
+      const slot = limitar(primeiroValor(req.query.slot).trim(), 40);
+>>>>>>> d70e05d (backup de segurança pentest)
       if (!SLOTS_VALIDOS.includes(slot)) {
         return res.status(400).json({ error: 'Slot de banner inválido.' });
       }
@@ -150,6 +209,10 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error('Erro em /api/banners:', err);
+<<<<<<< HEAD
     return res.status(500).json({ error: 'Erro interno no servidor.', detail: String(err && err.message || err) });
+=======
+    return res.status(500).json({ error: 'Erro interno no servidor. Tente novamente em instantes.' });
+>>>>>>> d70e05d (backup de segurança pentest)
   }
 };

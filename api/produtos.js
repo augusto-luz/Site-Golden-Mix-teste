@@ -7,6 +7,17 @@
 // DELETE /api/produtos?id=1   -> remove produto (exige senha admin)
 
 const { sql } = require('@vercel/postgres');
+<<<<<<< HEAD
+=======
+const { compararSenhaSegura, aplicarRateLimit, validarEsquemaUrlImagem, primeiroValor } = require('./_lib/security');
+
+// Limites de tamanho para os campos de texto — evita abuso (payloads gigantes) mesmo
+// vindo de quem já tem a senha do admin, e mantém o banco/PDF do catálogo saudáveis.
+const LIMITE_NOME = 200;
+const LIMITE_CATEGORIA = 50;
+const LIMITE_DESCRICAO = 2000;
+const LIMITE_URL = 2000;
+>>>>>>> d70e05d (backup de segurança pentest)
 
 let tabelaVerificada = false;
 
@@ -36,12 +47,25 @@ function verificarSenha(req) {
     return { ok: false, status: 500, error: 'ADMIN_PASSWORD não configurado nas variáveis de ambiente do servidor.' };
   }
   const recebida = req.headers['x-admin-password'];
+<<<<<<< HEAD
   if (!recebida || recebida !== esperado) {
+=======
+  if (!compararSenhaSegura(recebida, esperado)) {
+>>>>>>> d70e05d (backup de segurança pentest)
     return { ok: false, status: 401, error: 'Senha administrativa inválida ou ausente.' };
   }
   return { ok: true };
 }
 
+<<<<<<< HEAD
+=======
+// Corta o texto no limite (em vez de rejeitar tudo) para não travar o cadastro
+// por um campo um pouco grande demais — mas nunca deixa passar sem limite.
+function limitar(texto, tamanho) {
+  return String(texto || '').slice(0, tamanho);
+}
+
+>>>>>>> d70e05d (backup de segurança pentest)
 module.exports = async function handler(req, res) {
   try {
     await garantirTabela();
@@ -52,6 +76,12 @@ module.exports = async function handler(req, res) {
     }
 
     // A partir daqui, todas as operações alteram dados e exigem a senha do admin
+<<<<<<< HEAD
+=======
+    if (aplicarRateLimit(req, res, { chave: 'produtos-escrita', maxTentativas: 30, janelaMs: 60 * 1000 })) {
+      return;
+    }
+>>>>>>> d70e05d (backup de segurança pentest)
     const auth = verificarSenha(req);
     if (!auth.ok) {
       return res.status(auth.status).json({ error: auth.error });
@@ -59,6 +89,7 @@ module.exports = async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = req.body || {};
+<<<<<<< HEAD
       const nome = (body.nome || '').trim();
       const categoria = (body.categoria || '').trim();
       const precoNum = parseFloat(body.preco);
@@ -69,6 +100,18 @@ module.exports = async function handler(req, res) {
 
       if (!nome || !categoria || isNaN(precoNum) || !imagemUrl) {
         return res.status(400).json({ error: 'Preencha nome, preço válido, categoria e ao menos a foto principal.' });
+=======
+      const nome = limitar((body.nome || '').trim(), LIMITE_NOME);
+      const categoria = limitar((body.categoria || '').trim(), LIMITE_CATEGORIA);
+      const precoNum = parseFloat(body.preco);
+      const descricao = limitar((body.descricao || '').trim(), LIMITE_DESCRICAO);
+      const imagemUrl = validarEsquemaUrlImagem(limitar((body.imagem_url || '').trim(), LIMITE_URL));
+      const imagemUrl2 = body.imagem_url_2 ? (validarEsquemaUrlImagem(limitar(body.imagem_url_2.trim(), LIMITE_URL)) || '') : '';
+      const imagemUrl3 = body.imagem_url_3 ? (validarEsquemaUrlImagem(limitar(body.imagem_url_3.trim(), LIMITE_URL)) || '') : '';
+
+      if (!nome || !categoria || isNaN(precoNum) || precoNum < 0 || precoNum > 1000000 || !imagemUrl) {
+        return res.status(400).json({ error: 'Preencha nome, preço válido, categoria e uma foto principal com link http(s) válido.' });
+>>>>>>> d70e05d (backup de segurança pentest)
       }
 
       const { rows } = await sql`
@@ -82,6 +125,7 @@ module.exports = async function handler(req, res) {
     if (req.method === 'PUT') {
       const body = req.body || {};
       const id = parseInt(body.id, 10);
+<<<<<<< HEAD
       const nome = (body.nome || '').trim();
       const categoria = (body.categoria || '').trim();
       const precoNum = parseFloat(body.preco);
@@ -89,12 +133,26 @@ module.exports = async function handler(req, res) {
       const imagemUrl = (body.imagem_url || '').trim();
       const imagemUrl2 = (body.imagem_url_2 || '').trim();
       const imagemUrl3 = (body.imagem_url_3 || '').trim();
+=======
+      const nome = limitar((body.nome || '').trim(), LIMITE_NOME);
+      const categoria = limitar((body.categoria || '').trim(), LIMITE_CATEGORIA);
+      const precoNum = parseFloat(body.preco);
+      const descricao = limitar((body.descricao || '').trim(), LIMITE_DESCRICAO);
+      const imagemUrl = validarEsquemaUrlImagem(limitar((body.imagem_url || '').trim(), LIMITE_URL));
+      const imagemUrl2 = body.imagem_url_2 ? (validarEsquemaUrlImagem(limitar(body.imagem_url_2.trim(), LIMITE_URL)) || '') : '';
+      const imagemUrl3 = body.imagem_url_3 ? (validarEsquemaUrlImagem(limitar(body.imagem_url_3.trim(), LIMITE_URL)) || '') : '';
+>>>>>>> d70e05d (backup de segurança pentest)
 
       if (!id) {
         return res.status(400).json({ error: 'ID do produto é obrigatório para atualizar.' });
       }
+<<<<<<< HEAD
       if (!nome || !categoria || isNaN(precoNum) || !imagemUrl) {
         return res.status(400).json({ error: 'Preencha nome, preço válido, categoria e ao menos a foto principal.' });
+=======
+      if (!nome || !categoria || isNaN(precoNum) || precoNum < 0 || precoNum > 1000000 || !imagemUrl) {
+        return res.status(400).json({ error: 'Preencha nome, preço válido, categoria e uma foto principal com link http(s) válido.' });
+>>>>>>> d70e05d (backup de segurança pentest)
       }
 
       const { rows } = await sql`
@@ -113,7 +171,11 @@ module.exports = async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+<<<<<<< HEAD
       const id = parseInt(req.query.id, 10);
+=======
+      const id = parseInt(primeiroValor(req.query.id), 10);
+>>>>>>> d70e05d (backup de segurança pentest)
       if (!id) {
         return res.status(400).json({ error: 'ID do produto é obrigatório para excluir.' });
       }
@@ -126,6 +188,12 @@ module.exports = async function handler(req, res) {
 
   } catch (err) {
     console.error('Erro em /api/produtos:', err);
+<<<<<<< HEAD
     return res.status(500).json({ error: 'Erro interno no servidor.', detail: String(err && err.message || err) });
+=======
+    // Não devolve detalhes internos do erro pro cliente (pode vazar estrutura do
+    // banco/infra) — o detalhe completo fica só no log do servidor (Vercel).
+    return res.status(500).json({ error: 'Erro interno no servidor. Tente novamente em instantes.' });
+>>>>>>> d70e05d (backup de segurança pentest)
   }
 };

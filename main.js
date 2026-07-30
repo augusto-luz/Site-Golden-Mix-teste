@@ -1,5 +1,28 @@
 /* Golden Mix Semijoias — interações do site */
 
+<<<<<<< HEAD
+=======
+/* ---- Segurança: escapa texto antes de inserir via innerHTML e valida links de imagem ----
+   Nome/categoria de produto vêm do banco (cadastrados no admin). Mesmo sendo uma área
+   protegida por senha, escapamos tudo aqui para que um eventual dado malicioso nunca
+   vire HTML/JS executável para quem visita o site. */
+function escapeHtml(valor) {
+  return String(valor == null ? '' : valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function sanitizeImgUrl(url) {
+  try {
+    var u = new URL(url, location.href);
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+  } catch (e) { /* URL inválida */ }
+  return ''; // link inválido/perigoso (ex: javascript:) — não renderiza
+}
+
+>>>>>>> d70e05d (backup de segurança pentest)
 var WHATSAPP_NUMBER = '5592984602401'; // Número da loja, formato 55 + DDD + número
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -244,17 +267,28 @@ document.addEventListener('DOMContentLoaded', function () {
           itemCard.id = 'produto-' + p.id;
           itemCard.setAttribute('data-category', p.categoria);
 
+<<<<<<< HEAD
           var fotos = [p.imagem_url, p.imagem_url_2, p.imagem_url_3].filter(Boolean);
+=======
+          var fotos = [p.imagem_url, p.imagem_url_2, p.imagem_url_3].filter(Boolean).map(sanitizeImgUrl).filter(Boolean);
+          var nomeSeguro = escapeHtml(p.nome);
+          var categoriaSegura = escapeHtml(p.categoria);
+>>>>>>> d70e05d (backup de segurança pentest)
 
           var pontosHtml = '';
           if (fotos.length > 1) {
             pontosHtml = '<div class="product-thumbs">' +
               fotos.map(function (url, i) {
+<<<<<<< HEAD
                 return '<button type="button" class="' + (i === 0 ? 'active' : '') + '" data-img="' + url + '" aria-label="Ver foto ' + (i + 1) + '"></button>';
+=======
+                return '<button type="button" class="' + (i === 0 ? 'active' : '') + '" data-img="' + escapeHtml(url) + '" aria-label="Ver foto ' + (i + 1) + '"></button>';
+>>>>>>> d70e05d (backup de segurança pentest)
               }).join('') +
               '</div>';
           }
 
+<<<<<<< HEAD
           var linkProduto = location.origin + location.pathname + '#produto-' + p.id;
 
           itemCard.innerHTML =
@@ -267,6 +301,20 @@ document.addEventListener('DOMContentLoaded', function () {
               '<span class="amount">R$ ' + parseFloat(p.preco).toFixed(2).replace('.', ',') + '</span>' +
             '</p>' +
             '<button class="btn btn-outline btn-sm" data-whatsapp-product="' + p.nome + '" data-whatsapp-link="' + linkProduto + '">Comprar no WhatsApp</button>';
+=======
+          var linkProduto = location.origin + location.pathname + '#produto-' + encodeURIComponent(p.id);
+
+          itemCard.innerHTML =
+            '<div class="product-art"><img src="' + escapeHtml(fotos[0] || '') + '" alt="' + nomeSeguro + '" loading="lazy"></div>' +
+            pontosHtml +
+            '<p class="cat-label">' + categoriaSegura + '</p>' +
+            '<h4>' + nomeSeguro + '</h4>' +
+            '<p class="product-price">' +
+              '<span class="from">A partir de</span>' +
+              '<span class="amount">R$ ' + escapeHtml(parseFloat(p.preco).toFixed(2).replace('.', ',')) + '</span>' +
+            '</p>' +
+            '<button class="btn btn-outline btn-sm" data-whatsapp-product="' + nomeSeguro + '" data-whatsapp-link="' + escapeHtml(linkProduto) + '">Comprar no WhatsApp</button>';
+>>>>>>> d70e05d (backup de segurança pentest)
 
           // Troca a foto principal ao clicar nos pontinhos, sem alterar a moldura do card
           var imgPrincipal = itemCard.querySelector('.product-art img');

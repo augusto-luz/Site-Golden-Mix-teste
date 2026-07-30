@@ -25,14 +25,27 @@ golden-mix-site/
 ├── style.css             → Todo o visual do site (cores, fontes, layout)
 ├── main.js               → Interações (menu mobile, FAQ, filtros, WhatsApp, vitrine dinâmica)
 ├── logo.png              → Logo oficial da marca (não foi alterada)
+<<<<<<< HEAD
 ├── package.json          → Dependências (@vercel/postgres, pdfkit)
 ├── vercel.json           → Config extra da função do catálogo em PDF
+=======
+├── robots.txt            → Impede indexação do admin e das rotas de API
+├── package.json          → Dependências (@vercel/postgres, pdfkit, sharp)
+├── vercel.json           → Cabeçalhos de segurança + config da função do catálogo em PDF
+>>>>>>> d70e05d (backup de segurança pentest)
 ├── .env.example          → Modelo das variáveis de ambiente necessárias
 ├── api/
 │   ├── produtos.js       → API do catálogo de peças (GET público / POST, PUT, DELETE protegidos)
 │   ├── banners.js        → API dos banners de imagem (GET público / PUT, DELETE protegidos)
+<<<<<<< HEAD
 │   ├── catalogo.js       → Gera o catálogo em PDF sob demanda (GET público)
 │   └── login.js          → Valida a senha do painel administrativo
+=======
+│   ├── catalogo.js       → Gera o catálogo em PDF sob demanda (GET público, com rate limit)
+│   ├── login.js          → Valida a senha do painel administrativo (com rate limit)
+│   └── _lib/
+│       └── security.js   → Funções de segurança compartilhadas (senha segura, rate limit, anti-SSRF)
+>>>>>>> d70e05d (backup de segurança pentest)
 └── README.md              → Este arquivo
 ```
 
@@ -154,6 +167,38 @@ vercel dev
 
 A CLI vai pedir para linkar o projeto e vai puxar as variáveis de ambiente configuradas na Vercel (ou você pode criar um `.env` local com base no `.env.example`).
 
+<<<<<<< HEAD
+=======
+## 🔒 Segurança (pentest e correções aplicadas)
+
+Foi feita uma revisão de segurança completa no código, olhando para os riscos mais comuns em sites com painel administrativo + banco de dados público. Veja o que foi corrigido e o que ainda depende de uma configuração sua na Vercel.
+
+### O que já foi corrigido no código
+
+- **Senha comparada de forma segura ("timing-safe")** — antes, a senha do admin era comparada com `===`, o que em teoria permite a um atacante muito persistente "adivinhar" a senha caractere por caractere medindo o tempo de resposta. Agora a comparação usa `crypto.timingSafeEqual`, que sempre leva o mesmo tempo.
+- **Rate limit contra força bruta** — `/api/login` agora aceita no máximo 6 tentativas a cada 5 minutos por IP; as rotas de escrita (`/api/produtos`, `/api/banners`) e o catálogo em PDF (`/api/catalogo`, que é público e caro de gerar) também têm limites. Isso é uma camada extra dentro do próprio código — o principal rate limit (mais forte, à prova de reinício de função) precisa ser ativado no painel da Vercel, veja abaixo.
+- **XSS armazenado corrigido** — nome, categoria e outros textos de produtos/banners eram inseridos direto no HTML da página (`innerHTML`) sem escapar. Se algum dia um dado malicioso entrasse no banco (ex.: senha do admin vazada e alguém cadastra um produto com `<script>`), ele rodaria para **todo mundo** que visitasse o site — e, pior, poderia roubar a própria senha guardada no navegador do admin. Agora todo texto vindo do banco é escapado antes de virar HTML, nas páginas públicas e no painel.
+- **Proteção contra SSRF na geração do catálogo** — o servidor baixa a foto de cada produto para montar o PDF. Agora, antes de baixar, ele verifica se o link é http/https público de verdade (bloqueia IPs internos, `localhost`, endereços de metadados de nuvem, etc.), para que um link malicioso não possa ser usado pra "espiar" a rede interna da Vercel/Neon. Também limitei o tamanho máximo de cada foto baixada (12MB) para evitar consumo excessivo de memória.
+- **Mensagens de erro não vazam mais detalhes internos** — os endpoints devolviam a mensagem de erro crua do banco/servidor pro navegador (`detail: ...`), o que pode ajudar um atacante a entender a estrutura do sistema. Agora o detalhe completo só vai pro log da Vercel; o cliente recebe uma mensagem genérica.
+- **Limites de tamanho nos campos** — nome, descrição, categoria, título e links de imagem agora têm um tamanho máximo, e o preço tem uma faixa válida (0 a 1.000.000), evitando abuso mesmo por quem já tem a senha.
+- **Cabeçalhos de segurança HTTP** (`vercel.json`): `X-Frame-Options: DENY` e `Content-Security-Policy: frame-ancestors 'none'` (protege contra clickjacking — ninguém consegue colocar o site, principalmente o `admin.html`, dentro de um `<iframe>` escondido em outro site), `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy` (desliga câmera/microfone/geolocalização, que o site não usa) e `Strict-Transport-Security` (força HTTPS).
+- **`robots.txt`** impedindo buscadores de indexar `/admin.html` e `/api/`.
+- Confirmado que **não há SQL Injection**: todas as consultas usam os parâmetros parametrizados do `@vercel/postgres` (`sql\`...\``), nunca concatenação de texto.
+- Confirmado que **não há CSRF**: a autenticação usa um header customizado (`x-admin-password`) em vez de cookie automático, então um site malicioso não consegue "forjar" uma ação administrativa no seu navegador sem saber a senha.
+
+### O que só dá pra configurar direto no painel da Vercel (recomendo fazer)
+
+1. **Ative uma regra de Rate Limit no Vercel Firewall** — é gratuito (1 regra incluída mesmo no plano Hobby): vá em **Project → Firewall → Rate Limiting → Create Rule**, aplique em `/api/*` (ou pelo menos em `/api/login` e `/api/catalogo`), algo como "máximo 20 requisições por IP a cada 10 segundos". Isso funciona no nível da rede da Vercel (antes mesmo de chegar na sua função), então é bem mais forte do que qualquer limite feito só no código.
+2. **Use uma senha de admin longa e aleatória** em `ADMIN_PASSWORD` (ex.: 20+ caracteres, tipo uma frase aleatória) — o rate limit dificulta força bruta, mas uma senha fraca (tipo "123456" ou "goldenmix") ainda cairia rápido mesmo com poucas tentativas por minuto.
+3. **Considere o plano Pro da Vercel.** O plano Hobby é, pelos termos de uso da própria Vercel, destinado a projetos **não comerciais** — como este é o site de uma loja de verdade, o adequado é o plano Pro (a partir de ~$20/mês), que também libera mais regras de firewall/rate limit.
+4. Se o site sofrer um ataque ativo (tráfego suspeito, tentativas de invasão), a Vercel tem um **"Attack Challenge Mode"** no Firewall que pode ser ativado rapidamente para exigir verificação extra de quem estiver acessando.
+
+### Limitações que vale saber
+
+- O rate limit feito no código (`api/_lib/security.js`) é "melhor esforço": cada função serverless roda isolada e pode reiniciar a qualquer momento, então esse controle não é 100% preciso sob alta escala — é um complemento, não substituto da regra de Firewall da Vercel (item 1 acima).
+- Não foi implementado um Content Security Policy 100% restrito (tipo bloquear todo HTML/CSS inline) porque o site usa bastante estilo/atributo inline nas páginas — travar isso sem testar ao vivo arriscaria quebrar partes do site. O CSP atual já bloqueia a maioria dos vetores de ataque comuns (iframe malicioso, carregamento de script de terceiros, plugins/objetos), mas não é o nível "máximo" possível.
+
+>>>>>>> d70e05d (backup de segurança pentest)
 ## 🚀 Como publicar o site na internet
 
 O site é hospedado na **Vercel**, que serve os arquivos estáticos (`index.html`, `produtos.html`, etc.) e as funções serverless de `/api` juntas, sem precisar de servidor próprio:

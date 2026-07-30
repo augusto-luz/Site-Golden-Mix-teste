@@ -14,6 +14,10 @@ const { sql } = require('@vercel/postgres');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
+<<<<<<< HEAD
+=======
+const { aplicarRateLimit, validarUrlImagemSegura, primeiroValor } = require('./_lib/security');
+>>>>>>> d70e05d (backup de segurança pentest)
 
 // Carregado com rede de segurança: se o sharp não conseguir carregar por algum motivo
 // específico do ambiente de deploy, o catálogo continua sendo gerado normalmente,
@@ -81,6 +85,7 @@ async function buscarProdutos(categoria) {
 async function baixarEConverterImagem(url, larguraPx, alturaPx) {
   if (!url || !sharp) return null;
   try {
+<<<<<<< HEAD
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 6000);
     const resposta = await fetch(url, { signal: controller.signal, headers: HEADERS_IMAGEM });
@@ -88,6 +93,29 @@ async function baixarEConverterImagem(url, larguraPx, alturaPx) {
     if (!resposta.ok) return null;
 
     const bufOriginal = Buffer.from(await resposta.arrayBuffer());
+=======
+    // Proteção contra SSRF: só baixa de http(s) público, nunca de IPs internos/privados
+    // (isso impede que um link de imagem seja usado para o servidor "espiar" a rede
+    // interna da Vercel/Neon, mesmo que esse link tenha vindo de um cadastro no admin).
+    const urlSegura = await validarUrlImagemSegura(url);
+    if (!urlSegura) return null;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const resposta = await fetch(urlSegura, { signal: controller.signal, headers: HEADERS_IMAGEM, redirect: 'follow' });
+    clearTimeout(timeout);
+    if (!resposta.ok) return null;
+
+    // Limite de tamanho por foto (12MB) — evita que uma imagem enorme (ou uma resposta
+    // maliciosa) consuma memória demais da função serverless.
+    const LIMITE_BYTES = 12 * 1024 * 1024;
+    const tamanhoInformado = parseInt(resposta.headers.get('content-length') || '0', 10);
+    if (tamanhoInformado && tamanhoInformado > LIMITE_BYTES) return null;
+
+    const bufOriginal = Buffer.from(await resposta.arrayBuffer());
+    if (bufOriginal.length > LIMITE_BYTES) return null;
+
+>>>>>>> d70e05d (backup de segurança pentest)
     // Converte qualquer formato (WebP, AVIF, JPG, PNG...) para PNG. Usamos "contain"
     // (não "cover") para a peça inteira sempre aparecer, sem cortar nenhuma parte —
     // o espaço sobrando fica transparente, revelando o fundo oval creme já desenhado
@@ -139,9 +167,21 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: 'Método não permitido.' });
   }
 
+<<<<<<< HEAD
   try {
     const categoria = (req.query.categoria || '').trim().toLowerCase();
     const forcarDownload = req.query.download === '1';
+=======
+  // Este endpoint é público e caro (baixa fotos, gera PDF na hora) — limitamos para
+  // evitar que alguém o use pra sobrecarregar a função ou estourar o uso na Vercel/Neon.
+  if (aplicarRateLimit(req, res, { chave: 'catalogo', maxTentativas: 10, janelaMs: 60 * 1000 })) {
+    return;
+  }
+
+  try {
+    const categoria = primeiroValor(req.query.categoria).trim().toLowerCase().slice(0, 50);
+    const forcarDownload = primeiroValor(req.query.download) === '1';
+>>>>>>> d70e05d (backup de segurança pentest)
 
     const produtos = await buscarProdutos(categoria);
     const tituloCategoria = categoria && categoria !== 'todos'
@@ -303,7 +343,11 @@ module.exports = async function handler(req, res) {
   } catch (err) {
     console.error('Erro em /api/catalogo:', err);
     if (!res.headersSent) {
+<<<<<<< HEAD
       res.status(500).json({ error: 'Erro ao gerar o catálogo.', detail: String(err && err.message || err) });
+=======
+      res.status(500).json({ error: 'Erro ao gerar o catálogo. Tente novamente em instantes.' });
+>>>>>>> d70e05d (backup de segurança pentest)
     } else {
       res.end();
     }
